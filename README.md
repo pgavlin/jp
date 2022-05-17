@@ -66,7 +66,7 @@ Below is a quick overview of the pointer syntax, for more complete information p
 "/age"                >> 37
 "/children"           >> ["Sara","Alex","Jack"]
 "/children/1"         >> "Alex"
-"/fav.movie"         >> "Deer Hunter"
+"/fav.movie"          >> "Deer Hunter"
 "/friends/1/last"     >> "Craig"
 ```
 
@@ -202,7 +202,7 @@ If you are consuming JSON from an unpredictable source then you may want to vali
 if !jp.Valid(json) {
 	return errors.New("invalid json")
 }
-value := jp.Get(json, "name.last")
+value := jp.Get(json, "/name/last")
 ```
 
 ## Unmarshal to a map
