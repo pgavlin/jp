@@ -4,7 +4,7 @@
 
 `jp` is a Go package that provides access to raw JSON content using [RFC 6901 JSON pointers](https://datatracker.ietf.org/doc/html/rfc6901).
 
-`jp` is derived from [GJSON](https://github.com/tidwall/gjson)
+`jp` is derived from [GJSON](https://github.com/tidwall/gjson).
 
 
 ## Installing
