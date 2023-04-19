@@ -1,5 +1,5 @@
-// Package gjson provides searching for json strings.
-package gjson
+// Package jp provides pointers for json strings.
+package jp
 
 import (
 	"strconv"
@@ -179,6 +179,18 @@ func (t Result) Float() float64 {
 func (t Result) Time() time.Time {
 	res, _ := time.Parse(time.RFC3339, t.String())
 	return res
+}
+
+// Len returns the length of the result if the result is an object or array.
+func (t Result) Len() int {
+	switch {
+	case t.IsArray():
+		return t.arrayOrMapLen('[')
+	case t.IsObject():
+		return t.arrayOrMapLen('{')
+	default:
+		return 0
+	}
 }
 
 // Array returns back an array of values.
@@ -455,6 +467,57 @@ func (t Result) arrayOrMap(vc byte, valueize bool) (r arrayOrMapResult) {
 	return
 }
 
+func (t Result) arrayOrMapLen(vc byte) int {
+	var json = t.Raw
+	var i int
+	var count int
+	for ; i < len(json); i++ {
+		if json[i] == vc {
+			i++
+			break
+		}
+		if json[i] > ' ' {
+			return 0
+		}
+	}
+	for ; i < len(json); i++ {
+		if json[i] <= ' ' {
+			continue
+		}
+		// get next value
+		if json[i] == ']' || json[i] == '}' {
+			break
+		}
+		var raw string
+		switch json[i] {
+		default:
+			if (json[i] >= '0' && json[i] <= '9') || json[i] == '-' {
+				raw = rawnum(json[i:])
+			} else {
+				continue
+			}
+		case '{', '[':
+			raw = squash(json[i:])
+		case 'n':
+			raw = tolit(json[i:])
+		case 't':
+			raw = tolit(json[i:])
+		case 'f':
+			raw = tolit(json[i:])
+		case '"':
+			raw, _ = rawstr(json[i:])
+		}
+
+		i += len(raw) - 1
+
+		count++
+	}
+	if vc == '{' {
+		return count / 2
+	}
+	return count
+}
+
 // Parse parses the json and returns a result.
 //
 // This function expects that the json is well-formed, and does not validate.
@@ -567,25 +630,25 @@ func squash(json string) string {
 	return json
 }
 
-func tonum(json string) (raw string, num float64) {
+func rawnum(json string) string {
 	for i := 1; i < len(json); i++ {
 		// less than dash might have valid characters
 		if json[i] <= '-' {
 			if json[i] <= ' ' || json[i] == ',' {
 				// break on whitespace and comma
-				raw = json[:i]
-				num, _ = strconv.ParseFloat(raw, 64)
-				return
+				return json[:i]
 			}
 			// could be a '+' or '-'. let's assume so.
 		} else if json[i] == ']' || json[i] == '}' {
 			// break on ']' or '}'
-			raw = json[:i]
-			num, _ = strconv.ParseFloat(raw, 64)
-			return
+			return json[:i]
 		}
 	}
-	raw = json
+	return json
+}
+
+func tonum(json string) (raw string, num float64) {
+	raw = rawnum(json)
 	num, _ = strconv.ParseFloat(raw, 64)
 	return
 }
@@ -599,7 +662,7 @@ func tolit(json string) (raw string) {
 	return json
 }
 
-func tostr(json string) (raw string, str string) {
+func rawstr(json string) (string, string) {
 	// expects that the lead character is a '"'
 	for i := 1; i < len(json); i++ {
 		if json[i] > '\\' {
@@ -628,7 +691,7 @@ func tostr(json string) (raw string, str string) {
 							continue
 						}
 					}
-					return json[:i+1], unescape(json[1:i])
+					return json[:i+1], json[1:i]
 				}
 			}
 			var ret string
@@ -637,15 +700,20 @@ func tostr(json string) (raw string, str string) {
 			} else {
 				ret = json[:i]
 			}
-			return ret, unescape(json[1:i])
+			return ret, json[1:i]
 		}
 	}
 	return json, json[1:]
 }
 
+func tostr(json string) (raw string, str string) {
+	raw, escaped := rawstr(json)
+	return raw, unescape(escaped)
+}
+
 // Exists returns true if value exists.
 //
-//  if gjson.Get(json, "name.last").Exists(){
+//  if jp.Get(json, "name.last").Exists(){
 //		println("value exists")
 //  }
 func (t Result) Exists() bool {
@@ -1192,6 +1260,10 @@ func runeit(json string) rune {
 
 // unescape unescapes a string
 func unescape(json string) string {
+	if json == "" {
+		return ""
+	}
+
 	var str = make([]byte, 0, len(json))
 	for i := 0; i < len(json); i++ {
 		switch {
@@ -1683,10 +1755,10 @@ func validnull(data []byte, i int) (outi int, ok bool) {
 
 // Valid returns true if the input is valid json.
 //
-//  if !gjson.Valid(json) {
+//  if !jp.Valid(json) {
 //  	return errors.New("invalid json")
 //  }
-//  value := gjson.Get(json, "name.last")
+//  value := jp.Get(json, "name.last")
 //
 func Valid(json string) bool {
 	_, ok := validpayload(stringBytes(json), 0)
@@ -1695,10 +1767,10 @@ func Valid(json string) bool {
 
 // ValidBytes returns true if the input is valid json.
 //
-//  if !gjson.Valid(json) {
+//  if !jp.Valid(json) {
 //  	return errors.New("invalid json")
 //  }
-//  value := gjson.Get(json, "name.last")
+//  value := jp.Get(json, "name.last")
 //
 // If working with bytes, this method preferred over ValidBytes(string(data))
 //

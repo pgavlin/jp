@@ -1,4 +1,4 @@
-package gjson
+package jp
 
 import (
 	"bytes"
@@ -867,6 +867,37 @@ var complicatedJSON = `
 }
 `
 
+func TestLen(t *testing.T) {
+	basic := Parse(basicJSON)
+	complicated := Parse(complicatedJSON)
+
+	cases := []struct {
+		value    Result
+		pointer  string
+		expected int
+	}{
+		{basic, "/", 12},
+		{basic, "/noop", 1},
+		{basic, "/loggy", 1},
+		{basic, "/loggy/programmers", 4},
+		{basic, "/loggy/programmers/0", 4},
+		{complicated, "/", 17},
+		{complicated, "/Nested", 2},
+		{complicated, "/nestedTagged/Ints", 4},
+		{complicated, "/SelfSlice", 1},
+		{complicated, "/Array", 5},
+		{complicated, "/NonBinary", 4},
+	}
+	for _, c := range cases {
+		t.Run(c.pointer, func(t *testing.T) {
+			actual := c.value.Get(c.pointer).Len()
+			if actual != c.expected {
+				t.Errorf("unexpected len: %v != %v", actual, c.expected)
+			}
+		})
+	}
+}
+
 func testvalid(t *testing.T, json string, expect bool) {
 	t.Helper()
 	_, ok := validpayload([]byte(json), 0)
@@ -1133,11 +1164,11 @@ func TestArrayValues(t *testing.T) {
 		output += fmt.Sprintf("%#v", val)
 	}
 	expect := strings.Join([]string{
-		`gjson.Result{Type:3, Raw:"\"PERSON1\"", Str:"PERSON1", Num:0, ` +
+		`jp.Result{Type:3, Raw:"\"PERSON1\"", Str:"PERSON1", Num:0, ` +
 			`Index:11}`,
-		`gjson.Result{Type:3, Raw:"\"PERSON2\"", Str:"PERSON2", Num:0, ` +
+		`jp.Result{Type:3, Raw:"\"PERSON2\"", Str:"PERSON2", Num:0, ` +
 			`Index:21}`,
-		`gjson.Result{Type:2, Raw:"0", Str:"", Num:0, Index:31}`,
+		`jp.Result{Type:2, Raw:"0", Str:"", Num:0, Index:31}`,
 	}, "\n")
 	if output != expect {
 		t.Fatalf("expected '%v', got '%v'", expect, output)
