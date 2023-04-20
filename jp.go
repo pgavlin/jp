@@ -2,6 +2,7 @@
 package jp
 
 import (
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -9,6 +10,10 @@ import (
 	"unicode/utf8"
 	"unsafe"
 )
+
+type Stringlike interface {
+	~string | ~[]byte
+}
 
 // Type is Result type
 type Type int
@@ -49,11 +54,11 @@ func (t Type) String() string {
 }
 
 // Result represents a json value that is returned from Get().
-type Result struct {
+type Result[T Stringlike] struct {
 	// Type is the json type
 	Type Type
 	// Raw is the raw json
-	Raw string
+	Raw T
 	// Str is the json string
 	Str string
 	// Num is the json number
@@ -63,7 +68,7 @@ type Result struct {
 }
 
 // String returns a string representation of the value.
-func (t Result) String() string {
+func (t Result[T]) String() string {
 	switch t.Type {
 	default:
 		return ""
@@ -83,18 +88,18 @@ func (t Result) String() string {
 				return strconv.FormatFloat(t.Num, 'f', -1, 64)
 			}
 		}
-		return t.Raw
+		return string(t.Raw)
 	case String:
 		return t.Str
 	case JSON:
-		return t.Raw
+		return string(t.Raw)
 	case True:
 		return "true"
 	}
 }
 
 // Bool returns an boolean representation.
-func (t Result) Bool() bool {
+func (t Result[T]) Bool() bool {
 	switch t.Type {
 	default:
 		return false
@@ -109,7 +114,7 @@ func (t Result) Bool() bool {
 }
 
 // Int returns an integer representation.
-func (t Result) Int() int64 {
+func (t Result[T]) Int() int64 {
 	switch t.Type {
 	default:
 		return 0
@@ -125,7 +130,7 @@ func (t Result) Int() int64 {
 			return i
 		}
 		// now try to parse the raw string
-		i, ok = parseInt(t.Raw)
+		i, ok = parseInt(string(t.Raw))
 		if ok {
 			return i
 		}
@@ -135,7 +140,7 @@ func (t Result) Int() int64 {
 }
 
 // Uint returns an unsigned integer representation.
-func (t Result) Uint() uint64 {
+func (t Result[T]) Uint() uint64 {
 	switch t.Type {
 	default:
 		return 0
@@ -151,7 +156,7 @@ func (t Result) Uint() uint64 {
 			return uint64(i)
 		}
 		// now try to parse the raw string
-		u, ok := parseUint(t.Raw)
+		u, ok := parseUint(string(t.Raw))
 		if ok {
 			return u
 		}
@@ -161,7 +166,7 @@ func (t Result) Uint() uint64 {
 }
 
 // Float returns an float64 representation.
-func (t Result) Float() float64 {
+func (t Result[T]) Float() float64 {
 	switch t.Type {
 	default:
 		return 0
@@ -176,13 +181,13 @@ func (t Result) Float() float64 {
 }
 
 // Time returns a time.Time representation.
-func (t Result) Time() time.Time {
+func (t Result[T]) Time() time.Time {
 	res, _ := time.Parse(time.RFC3339, t.String())
 	return res
 }
 
 // Len returns the length of the result if the result is an object or array.
-func (t Result) Len() int {
+func (t Result[T]) Len() int {
 	switch {
 	case t.IsArray():
 		return t.arrayOrMapLen('[')
@@ -198,43 +203,43 @@ func (t Result) Len() int {
 // array will be returned.
 // If the result is not a JSON array, the return value will be an
 // array containing one result.
-func (t Result) Array() []Result {
+func (t Result[T]) Array() []Result[T] {
 	if t.Type == Null {
-		return []Result{}
+		return []Result[T]{}
 	}
 	if !t.IsArray() {
-		return []Result{t}
+		return []Result[T]{t}
 	}
 	r := t.arrayOrMap('[', false)
 	return r.a
 }
 
 // IsObject returns true if the result value is a JSON object.
-func (t Result) IsObject() bool {
+func (t Result[T]) IsObject() bool {
 	return t.Type == JSON && len(t.Raw) > 0 && t.Raw[0] == '{'
 }
 
 // IsArray returns true if the result value is a JSON array.
-func (t Result) IsArray() bool {
+func (t Result[T]) IsArray() bool {
 	return t.Type == JSON && len(t.Raw) > 0 && t.Raw[0] == '['
 }
 
 // IsBool returns true if the result value is a JSON boolean.
-func (t Result) IsBool() bool {
+func (t Result[T]) IsBool() bool {
 	return t.Type == True || t.Type == False
 }
 
-type Iterator struct {
-	root Result
+type Iterator[T Stringlike] struct {
+	root Result[T]
 
 	obj bool
 	i   int
 
-	key   Result
-	value Result
+	key   Result[T]
+	value Result[T]
 }
 
-func (it *Iterator) init() bool {
+func (it *Iterator[T]) init() bool {
 	if it.i != -1 {
 		return true
 	}
@@ -258,14 +263,14 @@ func (it *Iterator) init() bool {
 	return false
 }
 
-func (it *Iterator) Next() bool {
+func (it *Iterator[T]) Next() bool {
 	if !it.init() {
 		return false
 	}
 
 	json := it.root.Raw
 
-	var str string
+	var str T
 	var vesc bool
 	var ok bool
 	for ; it.i < len(json); it.i++ {
@@ -281,7 +286,7 @@ func (it *Iterator) Next() bool {
 			if vesc {
 				it.key.Str = unescape(str[1 : len(str)-1])
 			} else {
-				it.key.Str = str[1 : len(str)-1]
+				it.key.Str = string(str[1 : len(str)-1])
 			}
 			it.key.Raw = str
 			it.key.Index = s + it.root.Index
@@ -305,16 +310,16 @@ func (it *Iterator) Next() bool {
 	return false
 }
 
-func (it *Iterator) Key() Result {
+func (it *Iterator[T]) Key() Result[T] {
 	return it.key
 }
 
-func (it *Iterator) Value() Result {
+func (it *Iterator[T]) Value() Result[T] {
 	return it.value
 }
 
-func (t Result) Range() *Iterator {
-	return &Iterator{root: t, i: -1}
+func (t Result[T]) Range() *Iterator[T] {
+	return &Iterator[T]{root: t, i: -1}
 }
 
 // ForEach iterates through values.
@@ -322,7 +327,7 @@ func (t Result) Range() *Iterator {
 // iterated. If the result is an Object, the iterator will pass the key and
 // value of each item. If the result is an Array, the iterator will pass the
 // index and value of each item.
-func (t Result) ForEach(iterator func(key, value Result) bool) {
+func (t Result[T]) ForEach(iterator func(key, value Result[T]) bool) {
 	it := t.Range()
 	for it.Next() {
 		if !iterator(it.Key(), it.Value()) {
@@ -333,9 +338,9 @@ func (t Result) ForEach(iterator func(key, value Result) bool) {
 
 // Map returns back a map of values. The result should be a JSON object.
 // If the result is not a JSON object, the return value will be an empty map.
-func (t Result) Map() map[string]Result {
+func (t Result[T]) Map() map[string]Result[T] {
 	if t.Type != JSON {
-		return map[string]Result{}
+		return map[string]Result[T]{}
 	}
 	r := t.arrayOrMap('{', false)
 	return r.o
@@ -343,26 +348,26 @@ func (t Result) Map() map[string]Result {
 
 // Get searches result for the specified path.
 // The result should be a JSON array or object.
-func (t Result) Get(path string) Result {
+func (t Result[T]) Get(path string) Result[T] {
 	r := Get(t.Raw, path)
 	r.Index += t.Index
 	return r
 }
 
-type arrayOrMapResult struct {
-	a  []Result
+type arrayOrMapResult[T Stringlike] struct {
+	a  []Result[T]
 	ai []interface{}
-	o  map[string]Result
+	o  map[string]Result[T]
 	oi map[string]interface{}
 	vc byte
 }
 
-func (t Result) arrayOrMap(vc byte, valueize bool) (r arrayOrMapResult) {
+func (t Result[T]) arrayOrMap(vc byte, valueize bool) (r arrayOrMapResult[T]) {
 	var json = t.Raw
 	var i int
-	var value Result
+	var value Result[T]
 	var count int
-	var key Result
+	var key Result[T]
 	if vc == 0 {
 		for ; i < len(json); i++ {
 			if json[i] == '{' || json[i] == '[' {
@@ -390,13 +395,13 @@ func (t Result) arrayOrMap(vc byte, valueize bool) (r arrayOrMapResult) {
 		if valueize {
 			r.oi = make(map[string]interface{})
 		} else {
-			r.o = make(map[string]Result)
+			r.o = make(map[string]Result[T])
 		}
 	} else {
 		if valueize {
 			r.ai = make([]interface{}, 0)
 		} else {
-			r.a = make([]Result, 0)
+			r.a = make([]Result[T], 0)
 		}
 	}
 	for ; i < len(json); i++ {
@@ -467,7 +472,7 @@ func (t Result) arrayOrMap(vc byte, valueize bool) (r arrayOrMapResult) {
 	return
 }
 
-func (t Result) arrayOrMapLen(vc byte) int {
+func (t Result[T]) arrayOrMapLen(vc byte) int {
 	var json = t.Raw
 	var i int
 	var count int
@@ -488,7 +493,7 @@ func (t Result) arrayOrMapLen(vc byte) int {
 		if json[i] == ']' || json[i] == '}' {
 			break
 		}
-		var raw string
+		var raw T
 		switch json[i] {
 		default:
 			if (json[i] >= '0' && json[i] <= '9') || json[i] == '-' {
@@ -524,8 +529,8 @@ func (t Result) arrayOrMapLen(vc byte) int {
 // Invalid json will not panic, but it may return back unexpected results.
 // If you are consuming JSON from an unpredictable source then you may want to
 // use the Valid function first.
-func Parse(json string) Result {
-	var value Result
+func Parse[T Stringlike](json T) Result[T] {
+	var value Result[T]
 	i := 0
 	for ; i < len(json); i++ {
 		if json[i] == '{' || json[i] == '[' {
@@ -561,7 +566,7 @@ func Parse(json string) Result {
 			value.Type = String
 			value.Raw, value.Str = tostr(json[i:])
 		default:
-			return Result{}
+			return Result[T]{}
 		}
 		break
 	}
@@ -571,13 +576,7 @@ func Parse(json string) Result {
 	return value
 }
 
-// ParseBytes parses the json and returns a result.
-// If working with bytes, this method preferred over Parse(string(data))
-func ParseBytes(json []byte) Result {
-	return Parse(string(json))
-}
-
-func squash(json string) string {
+func squash[T Stringlike](json T) T {
 	// expects that the lead character is a '[' or '{' or '(' or '"'
 	// squash the value, ignoring all nested arrays and objects.
 	var i, depth int
@@ -630,7 +629,7 @@ func squash(json string) string {
 	return json
 }
 
-func rawnum(json string) string {
+func rawnum[T Stringlike](json T) T {
 	for i := 1; i < len(json); i++ {
 		// less than dash might have valid characters
 		if json[i] <= '-' {
@@ -647,13 +646,13 @@ func rawnum(json string) string {
 	return json
 }
 
-func tonum(json string) (raw string, num float64) {
+func tonum[T Stringlike](json T) (raw T, num float64) {
 	raw = rawnum(json)
-	num, _ = strconv.ParseFloat(raw, 64)
+	num, _ = strconv.ParseFloat(string(raw), 64)
 	return
 }
 
-func tolit(json string) (raw string) {
+func tolit[T Stringlike](json T) T {
 	for i := 1; i < len(json); i++ {
 		if json[i] < 'a' || json[i] > 'z' {
 			return json[:i]
@@ -662,7 +661,7 @@ func tolit(json string) (raw string) {
 	return json
 }
 
-func rawstr(json string) (string, string) {
+func rawstr[T Stringlike](json T) (T, T) {
 	// expects that the lead character is a '"'
 	for i := 1; i < len(json); i++ {
 		if json[i] > '\\' {
@@ -694,7 +693,7 @@ func rawstr(json string) (string, string) {
 					return json[:i+1], json[1:i]
 				}
 			}
-			var ret string
+			var ret T
 			if i+1 < len(json) {
 				ret = json[:i+1]
 			} else {
@@ -706,7 +705,7 @@ func rawstr(json string) (string, string) {
 	return json, json[1:]
 }
 
-func tostr(json string) (raw string, str string) {
+func tostr[T Stringlike](json T) (raw T, str string) {
 	raw, escaped := rawstr(json)
 	return raw, unescape(escaped)
 }
@@ -716,7 +715,7 @@ func tostr(json string) (raw string, str string) {
 //  if jp.Get(json, "name.last").Exists(){
 //		println("value exists")
 //  }
-func (t Result) Exists() bool {
+func (t Result[T]) Exists() bool {
 	return t.Type != Null || len(t.Raw) != 0
 }
 
@@ -730,7 +729,7 @@ func (t Result) Exists() bool {
 //	map[string]interface{}, for JSON objects
 //	[]interface{}, for JSON arrays
 //
-func (t Result) Value() interface{} {
+func (t Result[T]) Value() interface{} {
 	if t.Type == String {
 		return t.Str
 	}
@@ -754,7 +753,7 @@ func (t Result) Value() interface{} {
 	}
 }
 
-func parseString(json string, i int) (int, string, bool, bool) {
+func parseString[T Stringlike](json T, i int) (int, T, bool, bool) {
 	var s = i
 	for ; i < len(json); i++ {
 		if json[i] > '\\' {
@@ -792,7 +791,7 @@ func parseString(json string, i int) (int, string, bool, bool) {
 	return i, json[s-1:], false, false
 }
 
-func parseNumber(json string, i int) (int, string) {
+func parseNumber[T Stringlike](json T, i int) (int, T) {
 	var s = i
 	i++
 	for ; i < len(json); i++ {
@@ -804,7 +803,7 @@ func parseNumber(json string, i int) (int, string) {
 	return i, json[s:]
 }
 
-func parseLiteral(json string, i int) (int, string) {
+func parseLiteral[T Stringlike](json T, i int) (int, T) {
 	var s = i
 	i++
 	for ; i < len(json); i++ {
@@ -883,7 +882,7 @@ func getArrayIndex(pointer string) (index int, rest string) {
 	return index, rest
 }
 
-func parseSquash(json string, i int) (int, string) {
+func parseSquash[T Stringlike](json T, i int) (int, T) {
 	// expects that the lead character is a '[' or '{' or '('
 	// squash the value, ignoring all nested arrays and objects.
 	// the first '[' or '{' or '(' has already been read
@@ -931,9 +930,10 @@ func parseSquash(json string, i int) (int, string) {
 	return i, json[s:]
 }
 
-func parseObject(c *parseContext, i int, pointer string) (int, bool) {
+func parseObject[T Stringlike](c *parseContext[T], i int, pointer string) (int, bool) {
 	var pmatch, kesc, vesc, ok, hit bool
-	var ref, key, val string
+	var ref string
+	var key, val T
 	ref, pointer = getReferenceToken(pointer)
 	if ref == "" {
 		// return the entire object
@@ -1001,7 +1001,7 @@ func parseObject(c *parseContext, i int, pointer string) (int, bool) {
 		if kesc {
 			pmatch = ref == unescape(key)
 		} else {
-			pmatch = ref == key
+			pmatch = ref == string(key)
 		}
 
 		hit = pmatch && !more
@@ -1020,7 +1020,7 @@ func parseObject(c *parseContext, i int, pointer string) (int, bool) {
 					if vesc {
 						c.value.Str = unescape(val[1 : len(val)-1])
 					} else {
-						c.value.Str = val[1 : len(val)-1]
+						c.value.Str = string(val[1 : len(val)-1])
 					}
 					c.value.Raw = val
 					c.value.Type = String
@@ -1082,7 +1082,7 @@ func parseObject(c *parseContext, i int, pointer string) (int, bool) {
 				if hit {
 					c.value.Raw = val
 					c.value.Type = Number
-					c.value.Num, _ = strconv.ParseFloat(val, 64)
+					c.value.Num, _ = strconv.ParseFloat(string(val), 64)
 					return i, true
 				}
 			}
@@ -1092,9 +1092,9 @@ func parseObject(c *parseContext, i int, pointer string) (int, bool) {
 	return i, false
 }
 
-func parseArray(c *parseContext, i int, pointer string) (int, bool) {
+func parseArray[T Stringlike](c *parseContext[T], i int, pointer string) (int, bool) {
 	var pmatch, vesc, ok, hit bool
-	var val string
+	var val T
 	var h int
 	var partidx int
 	partidx, pointer = getArrayIndex(pointer)
@@ -1135,7 +1135,7 @@ func parseArray(c *parseContext, i int, pointer string) (int, bool) {
 					if vesc {
 						c.value.Str = unescape(val[1 : len(val)-1])
 					} else {
-						c.value.Str = val[1 : len(val)-1]
+						c.value.Str = string(val[1 : len(val)-1])
 					}
 					c.value.Raw = val
 					c.value.Type = String
@@ -1199,7 +1199,7 @@ func parseArray(c *parseContext, i int, pointer string) (int, bool) {
 				if hit {
 					c.value.Raw = val
 					c.value.Type = Number
-					c.value.Num, _ = strconv.ParseFloat(val, 64)
+					c.value.Num, _ = strconv.ParseFloat(string(val), 64)
 					return i, true
 				}
 			}
@@ -1209,9 +1209,9 @@ func parseArray(c *parseContext, i int, pointer string) (int, bool) {
 	return i, false
 }
 
-type parseContext struct {
-	json  string
-	value Result
+type parseContext[T Stringlike] struct {
+	json  T
+	value Result[T]
 }
 
 // Get searches json for the specified RFC 6901 JSON pointer.
@@ -1220,7 +1220,7 @@ type parseContext struct {
 // Invalid json will not panic, but it may return back unexpected results.
 // If you are consuming JSON from an unpredictable source then you may want to
 // use the Valid function first.
-func Get(json, pointer string) Result {
+func Get[T Stringlike](json T, pointer string) Result[T] {
 	for len(pointer) > 0 && pointer[0] == '/' {
 		pointer = pointer[1:]
 	}
@@ -1229,7 +1229,7 @@ func Get(json, pointer string) Result {
 		return result
 	}
 
-	c := parseContext{json: json}
+	c := parseContext[T]{json: json}
 	for i := 0; i < len(c.json); i++ {
 		if c.json[i] == '{' {
 			i++
@@ -1246,21 +1246,15 @@ func Get(json, pointer string) Result {
 	return c.value
 }
 
-// GetBytes searches json for the specified path.
-// If working with bytes, this method preferred over Get(string(data), path)
-func GetBytes(json []byte, path string) Result {
-	return getBytes(json, path)
-}
-
 // runeit returns the rune from the the \uXXXX
-func runeit(json string) rune {
-	n, _ := strconv.ParseUint(json[:4], 16, 64)
+func runeit[T Stringlike](json T) rune {
+	n, _ := strconv.ParseUint(string(json[:4]), 16, 64)
 	return rune(n)
 }
 
 // unescape unescapes a string
-func unescape(json string) string {
-	if json == "" {
+func unescape[T Stringlike](json T) string {
+	if len(json) == 0 {
 		return ""
 	}
 
@@ -1327,7 +1321,7 @@ func unescape(json string) string {
 //
 //  Null < False < Number < String < True < JSON
 //
-func (t Result) Less(token Result, caseSensitive bool) bool {
+func (t Result[T]) Less(token Result[T], caseSensitive bool) bool {
 	if t.Type < token.Type {
 		return true
 	}
@@ -1343,7 +1337,7 @@ func (t Result) Less(token Result, caseSensitive bool) bool {
 	if t.Type == Number {
 		return t.Num < token.Num
 	}
-	return t.Raw < token.Raw
+	return string(t.Raw) < string(token.Raw)
 }
 
 func stringLessInsensitive(a, b string) bool {
@@ -1386,9 +1380,9 @@ func stringLessInsensitive(a, b string) bool {
 // parseAny parses the next value from a json string.
 // A Result is returned when the hit param is set.
 // The return values are (i int, res Result, ok bool)
-func parseAny(json string, i int, hit bool) (int, Result, bool) {
-	var res Result
-	var val string
+func parseAny[T Stringlike](json T, i int, hit bool) (int, Result[T], bool) {
+	var res Result[T]
+	var val T
 	for ; i < len(json); i++ {
 		if json[i] == '{' || json[i] == '[' {
 			i, val = parseSquash(json, i)
@@ -1396,7 +1390,7 @@ func parseAny(json string, i int, hit bool) (int, Result, bool) {
 				res.Raw = val
 				res.Type = JSON
 			}
-			var tmp parseContext
+			var tmp parseContext[T]
 			tmp.value = res
 			fillIndex(json, &tmp)
 			return i, tmp.value, true
@@ -1420,7 +1414,7 @@ func parseAny(json string, i int, hit bool) (int, Result, bool) {
 				if vesc {
 					res.Str = unescape(val[1 : len(val)-1])
 				} else {
-					res.Str = val[1 : len(val)-1]
+					res.Str = string(val[1 : len(val)-1])
 				}
 			}
 			return i, res, true
@@ -1452,7 +1446,7 @@ func parseAny(json string, i int, hit bool) (int, Result, bool) {
 			if hit {
 				res.Raw = val
 				res.Type = Number
-				res.Num, _ = strconv.ParseFloat(val, 64)
+				res.Num, _ = strconv.ParseFloat(string(val), 64)
 			}
 			return i, res, true
 		}
@@ -1464,26 +1458,15 @@ func parseAny(json string, i int, hit bool) (int, Result, bool) {
 // GetMany searches json for the multiple paths.
 // The return value is a Result array where the number of items
 // will be equal to the number of input paths.
-func GetMany(json string, path ...string) []Result {
-	res := make([]Result, len(path))
+func GetMany[T Stringlike](json T, path ...string) []Result[T] {
+	res := make([]Result[T], len(path))
 	for i, path := range path {
 		res[i] = Get(json, path)
 	}
 	return res
 }
 
-// GetManyBytes searches json for the multiple paths.
-// The return value is a Result array where the number of items
-// will be equal to the number of input paths.
-func GetManyBytes(json []byte, path ...string) []Result {
-	res := make([]Result, len(path))
-	for i, path := range path {
-		res[i] = GetBytes(json, path)
-	}
-	return res
-}
-
-func validpayload(data []byte, i int) (outi int, ok bool) {
+func validpayload[T Stringlike](data T, i int) (outi int, ok bool) {
 	for ; i < len(data); i++ {
 		switch data[i] {
 		default:
@@ -1506,7 +1489,7 @@ func validpayload(data []byte, i int) (outi int, ok bool) {
 	}
 	return i, false
 }
-func validany(data []byte, i int) (outi int, ok bool) {
+func validany[T Stringlike](data T, i int) (outi int, ok bool) {
 	for ; i < len(data); i++ {
 		switch data[i] {
 		default:
@@ -1531,7 +1514,7 @@ func validany(data []byte, i int) (outi int, ok bool) {
 	}
 	return i, false
 }
-func validobject(data []byte, i int) (outi int, ok bool) {
+func validobject[T Stringlike](data T, i int) (outi int, ok bool) {
 	for ; i < len(data); i++ {
 		switch data[i] {
 		default:
@@ -1573,7 +1556,7 @@ func validobject(data []byte, i int) (outi int, ok bool) {
 	}
 	return i, false
 }
-func validcolon(data []byte, i int) (outi int, ok bool) {
+func validcolon[T Stringlike](data T, i int) (outi int, ok bool) {
 	for ; i < len(data); i++ {
 		switch data[i] {
 		default:
@@ -1586,7 +1569,7 @@ func validcolon(data []byte, i int) (outi int, ok bool) {
 	}
 	return i, false
 }
-func validcomma(data []byte, i int, end byte) (outi int, ok bool) {
+func validcomma[T Stringlike](data T, i int, end byte) (outi int, ok bool) {
 	for ; i < len(data); i++ {
 		switch data[i] {
 		default:
@@ -1601,7 +1584,7 @@ func validcomma(data []byte, i int, end byte) (outi int, ok bool) {
 	}
 	return i, false
 }
-func validarray(data []byte, i int) (outi int, ok bool) {
+func validarray[T Stringlike](data T, i int) (outi int, ok bool) {
 	for ; i < len(data); i++ {
 		switch data[i] {
 		default:
@@ -1624,7 +1607,7 @@ func validarray(data []byte, i int) (outi int, ok bool) {
 	}
 	return i, false
 }
-func validstring(data []byte, i int) (outi int, ok bool) {
+func validstring[T Stringlike](data T, i int) (outi int, ok bool) {
 	for ; i < len(data); i++ {
 		if data[i] < ' ' {
 			return i, false
@@ -1656,7 +1639,7 @@ func validstring(data []byte, i int) (outi int, ok bool) {
 	}
 	return i, false
 }
-func validnumber(data []byte, i int) (outi int, ok bool) {
+func validnumber[T Stringlike](data T, i int) (outi int, ok bool) {
 	i--
 	// sign
 	if data[i] == '-' {
@@ -1731,21 +1714,21 @@ func validnumber(data []byte, i int) (outi int, ok bool) {
 	return i, true
 }
 
-func validtrue(data []byte, i int) (outi int, ok bool) {
+func validtrue[T Stringlike](data T, i int) (outi int, ok bool) {
 	if i+3 <= len(data) && data[i] == 'r' && data[i+1] == 'u' &&
 		data[i+2] == 'e' {
 		return i + 3, true
 	}
 	return i, false
 }
-func validfalse(data []byte, i int) (outi int, ok bool) {
+func validfalse[T Stringlike](data T, i int) (outi int, ok bool) {
 	if i+4 <= len(data) && data[i] == 'a' && data[i+1] == 'l' &&
 		data[i+2] == 's' && data[i+3] == 'e' {
 		return i + 4, true
 	}
 	return i, false
 }
-func validnull(data []byte, i int) (outi int, ok bool) {
+func validnull[T Stringlike](data T, i int) (outi int, ok bool) {
 	if i+3 <= len(data) && data[i] == 'u' && data[i+1] == 'l' &&
 		data[i+2] == 'l' {
 		return i + 3, true
@@ -1760,21 +1743,7 @@ func validnull(data []byte, i int) (outi int, ok bool) {
 //  }
 //  value := jp.Get(json, "name.last")
 //
-func Valid(json string) bool {
-	_, ok := validpayload(stringBytes(json), 0)
-	return ok
-}
-
-// ValidBytes returns true if the input is valid json.
-//
-//  if !jp.Valid(json) {
-//  	return errors.New("invalid json")
-//  }
-//  value := jp.Get(json, "name.last")
-//
-// If working with bytes, this method preferred over ValidBytes(string(data))
-//
-func ValidBytes(json []byte) bool {
+func Valid[T Stringlike](json T) bool {
 	_, ok := validpayload(json, 0)
 	return ok
 }
@@ -1841,75 +1810,27 @@ type sliceHeader struct {
 	cap  int
 }
 
-// getBytes casts the input json bytes to a string and safely returns the
-// results as uniquely allocated data. This operation is intended to minimize
-// copies and allocations for the large json string->[]byte.
-func getBytes(json []byte, path string) Result {
-	var result Result
-	if json != nil {
-		// unsafe cast to string
-		result = Get(*(*string)(unsafe.Pointer(&json)), path)
-		// safely get the string headers
-		rawhi := *(*stringHeader)(unsafe.Pointer(&result.Raw))
-		strhi := *(*stringHeader)(unsafe.Pointer(&result.Str))
-		// create byte slice headers
-		rawh := sliceHeader{data: rawhi.data, len: rawhi.len, cap: rawhi.len}
-		strh := sliceHeader{data: strhi.data, len: strhi.len, cap: rawhi.len}
-		if strh.data == nil {
-			// str is nil
-			if rawh.data == nil {
-				// raw is nil
-				result.Raw = ""
-			} else {
-				// raw has data, safely copy the slice header to a string
-				result.Raw = string(*(*[]byte)(unsafe.Pointer(&rawh)))
-			}
-			result.Str = ""
-		} else if rawh.data == nil {
-			// raw is nil
-			result.Raw = ""
-			// str has data, safely copy the slice header to a string
-			result.Str = string(*(*[]byte)(unsafe.Pointer(&strh)))
-		} else if uintptr(strh.data) >= uintptr(rawh.data) &&
-			uintptr(strh.data)+uintptr(strh.len) <=
-				uintptr(rawh.data)+uintptr(rawh.len) {
-			// Str is a substring of Raw.
-			start := uintptr(strh.data) - uintptr(rawh.data)
-			// safely copy the raw slice header
-			result.Raw = string(*(*[]byte)(unsafe.Pointer(&rawh)))
-			// substring the raw
-			result.Str = result.Raw[start : start+uintptr(strh.len)]
-		} else {
-			// safely copy both the raw and str slice headers to strings
-			result.Raw = string(*(*[]byte)(unsafe.Pointer(&rawh)))
-			result.Str = string(*(*[]byte)(unsafe.Pointer(&strh)))
-		}
-	}
-	return result
-}
-
 // fillIndex finds the position of Raw data and assigns it to the Index field
 // of the resulting value. If the position cannot be found then Index zero is
 // used instead.
-func fillIndex(json string, c *parseContext) {
+func fillIndex[T Stringlike](json T, c *parseContext[T]) {
 	if len(c.value.Raw) > 0 {
-		jhdr := *(*stringHeader)(unsafe.Pointer(&json))
-		rhdr := *(*stringHeader)(unsafe.Pointer(&(c.value.Raw)))
-		c.value.Index = int(uintptr(rhdr.data) - uintptr(jhdr.data))
+		var jbase, rbase *byte
+
+		var zero T
+		switch reflect.ValueOf(zero).Kind() {
+		case reflect.String:
+			jbase, rbase = unsafe.StringData(string(json)), unsafe.StringData(string(c.value.Raw))
+		case reflect.Slice:
+			jbase, rbase = unsafe.SliceData([]byte(json)), unsafe.SliceData([]byte(c.value.Raw))
+		default:
+			c.value.Index = 0
+			return
+		}
+
+		c.value.Index = int(uintptr(unsafe.Pointer(rbase)) - uintptr(unsafe.Pointer(jbase)))
 		if c.value.Index < 0 || c.value.Index >= len(json) {
 			c.value.Index = 0
 		}
 	}
-}
-
-func stringBytes(s string) []byte {
-	return *(*[]byte)(unsafe.Pointer(&sliceHeader{
-		data: (*stringHeader)(unsafe.Pointer(&s)).data,
-		len:  len(s),
-		cap:  len(s),
-	}))
-}
-
-func bytesString(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
 }

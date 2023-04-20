@@ -31,7 +31,7 @@ func TestRandomData(t *testing.T) {
 			t.Fatal(err)
 		}
 		lstr = string(b[:n])
-		GetBytes([]byte(lstr), "/zzzz")
+		Get([]byte(lstr), "/zzzz")
 		Parse(lstr)
 	}
 }
@@ -197,12 +197,12 @@ func TestManyRecursion(t *testing.T) {
 }
 func TestByteSafety(t *testing.T) {
 	jsonb := []byte(`{"name":"Janet","age":38}`)
-	mtok := GetBytes(jsonb, "/name")
+	mtok := Get(jsonb, "/name")
 	if mtok.String() != "Janet" {
 		t.Fatalf("expected %v, got %v", "Jason", mtok.String())
 	}
-	mtok2 := GetBytes(jsonb, "/age")
-	if mtok2.Raw != "38" {
+	mtok2 := Get(jsonb, "/age")
+	if string(mtok2.Raw) != "38" {
 		t.Fatalf("expected %v, got %v", "Jason", mtok2.Raw)
 	}
 	jsonb[9] = 'T'
@@ -213,8 +213,8 @@ func TestByteSafety(t *testing.T) {
 	}
 }
 
-func get(json, path string) Result {
-	return GetBytes([]byte(json), path)
+func get(json, path string) Result[[]byte] {
+	return Get([]byte(json), path)
 }
 
 func TestIsArrayIsObject(t *testing.T) {
@@ -288,84 +288,84 @@ func TestIssue38(t *testing.T) {
 	Get(`["S3O PEDRO DO BUTI\udf93\u1345asd"]`, "/0")
 }
 func TestTypes(t *testing.T) {
-	assert(t, (Result{Type: String}).Type.String() == "String")
-	assert(t, (Result{Type: Number}).Type.String() == "Number")
-	assert(t, (Result{Type: Null}).Type.String() == "Null")
-	assert(t, (Result{Type: False}).Type.String() == "False")
-	assert(t, (Result{Type: True}).Type.String() == "True")
-	assert(t, (Result{Type: JSON}).Type.String() == "JSON")
-	assert(t, (Result{Type: 100}).Type.String() == "")
+	assert(t, (Result[string]{Type: String}).Type.String() == "String")
+	assert(t, (Result[string]{Type: Number}).Type.String() == "Number")
+	assert(t, (Result[string]{Type: Null}).Type.String() == "Null")
+	assert(t, (Result[string]{Type: False}).Type.String() == "False")
+	assert(t, (Result[string]{Type: True}).Type.String() == "True")
+	assert(t, (Result[string]{Type: JSON}).Type.String() == "JSON")
+	assert(t, (Result[string]{Type: 100}).Type.String() == "")
 	// bool
-	assert(t, (Result{Type: True}).Bool() == true)
-	assert(t, (Result{Type: False}).Bool() == false)
-	assert(t, (Result{Type: Number, Num: 1}).Bool() == true)
-	assert(t, (Result{Type: Number, Num: 0}).Bool() == false)
-	assert(t, (Result{Type: String, Str: "1"}).Bool() == true)
-	assert(t, (Result{Type: String, Str: "T"}).Bool() == true)
-	assert(t, (Result{Type: String, Str: "t"}).Bool() == true)
-	assert(t, (Result{Type: String, Str: "true"}).Bool() == true)
-	assert(t, (Result{Type: String, Str: "True"}).Bool() == true)
-	assert(t, (Result{Type: String, Str: "TRUE"}).Bool() == true)
-	assert(t, (Result{Type: String, Str: "tRuE"}).Bool() == true)
-	assert(t, (Result{Type: String, Str: "0"}).Bool() == false)
-	assert(t, (Result{Type: String, Str: "f"}).Bool() == false)
-	assert(t, (Result{Type: String, Str: "F"}).Bool() == false)
-	assert(t, (Result{Type: String, Str: "false"}).Bool() == false)
-	assert(t, (Result{Type: String, Str: "False"}).Bool() == false)
-	assert(t, (Result{Type: String, Str: "FALSE"}).Bool() == false)
-	assert(t, (Result{Type: String, Str: "fAlSe"}).Bool() == false)
-	assert(t, (Result{Type: String, Str: "random"}).Bool() == false)
+	assert(t, (Result[string]{Type: True}).Bool() == true)
+	assert(t, (Result[string]{Type: False}).Bool() == false)
+	assert(t, (Result[string]{Type: Number, Num: 1}).Bool() == true)
+	assert(t, (Result[string]{Type: Number, Num: 0}).Bool() == false)
+	assert(t, (Result[string]{Type: String, Str: "1"}).Bool() == true)
+	assert(t, (Result[string]{Type: String, Str: "T"}).Bool() == true)
+	assert(t, (Result[string]{Type: String, Str: "t"}).Bool() == true)
+	assert(t, (Result[string]{Type: String, Str: "true"}).Bool() == true)
+	assert(t, (Result[string]{Type: String, Str: "True"}).Bool() == true)
+	assert(t, (Result[string]{Type: String, Str: "TRUE"}).Bool() == true)
+	assert(t, (Result[string]{Type: String, Str: "tRuE"}).Bool() == true)
+	assert(t, (Result[string]{Type: String, Str: "0"}).Bool() == false)
+	assert(t, (Result[string]{Type: String, Str: "f"}).Bool() == false)
+	assert(t, (Result[string]{Type: String, Str: "F"}).Bool() == false)
+	assert(t, (Result[string]{Type: String, Str: "false"}).Bool() == false)
+	assert(t, (Result[string]{Type: String, Str: "False"}).Bool() == false)
+	assert(t, (Result[string]{Type: String, Str: "FALSE"}).Bool() == false)
+	assert(t, (Result[string]{Type: String, Str: "fAlSe"}).Bool() == false)
+	assert(t, (Result[string]{Type: String, Str: "random"}).Bool() == false)
 
 	// int
-	assert(t, (Result{Type: String, Str: "1"}).Int() == 1)
-	assert(t, (Result{Type: True}).Int() == 1)
-	assert(t, (Result{Type: False}).Int() == 0)
-	assert(t, (Result{Type: Number, Num: 1}).Int() == 1)
+	assert(t, (Result[string]{Type: String, Str: "1"}).Int() == 1)
+	assert(t, (Result[string]{Type: True}).Int() == 1)
+	assert(t, (Result[string]{Type: False}).Int() == 0)
+	assert(t, (Result[string]{Type: Number, Num: 1}).Int() == 1)
 	// uint
-	assert(t, (Result{Type: String, Str: "1"}).Uint() == 1)
-	assert(t, (Result{Type: True}).Uint() == 1)
-	assert(t, (Result{Type: False}).Uint() == 0)
-	assert(t, (Result{Type: Number, Num: 1}).Uint() == 1)
+	assert(t, (Result[string]{Type: String, Str: "1"}).Uint() == 1)
+	assert(t, (Result[string]{Type: True}).Uint() == 1)
+	assert(t, (Result[string]{Type: False}).Uint() == 0)
+	assert(t, (Result[string]{Type: Number, Num: 1}).Uint() == 1)
 	// float
-	assert(t, (Result{Type: String, Str: "1"}).Float() == 1)
-	assert(t, (Result{Type: True}).Float() == 1)
-	assert(t, (Result{Type: False}).Float() == 0)
-	assert(t, (Result{Type: Number, Num: 1}).Float() == 1)
+	assert(t, (Result[string]{Type: String, Str: "1"}).Float() == 1)
+	assert(t, (Result[string]{Type: True}).Float() == 1)
+	assert(t, (Result[string]{Type: False}).Float() == 0)
+	assert(t, (Result[string]{Type: Number, Num: 1}).Float() == 1)
 }
 
 func TestForEach(t *testing.T) {
-	Result{}.ForEach(nil)
-	Result{Type: String, Str: "Hello"}.ForEach(func(_, value Result) bool {
+	Result[string]{}.ForEach(nil)
+	Result[string]{Type: String, Str: "Hello"}.ForEach(func(_, value Result[string]) bool {
 		assert(t, value.String() == "Hello")
 		return false
 	})
-	Result{Type: JSON, Raw: "*invalid*"}.ForEach(nil)
+	Result[string]{Type: JSON, Raw: "*invalid*"}.ForEach(nil)
 
 	json := ` {"name": {"first": "Janet","last": "Prichard"},
 	"asd\nf":"\ud83d\udd13","age": 47}`
 	var count int
-	ParseBytes([]byte(json)).ForEach(func(key, value Result) bool {
+	Parse([]byte(json)).ForEach(func(key, value Result[[]byte]) bool {
 		count++
 		return true
 	})
 	assert(t, count == 3)
-	ParseBytes([]byte(`{"bad`)).ForEach(nil)
-	ParseBytes([]byte(`{"ok":"bad`)).ForEach(nil)
+	Parse([]byte(`{"bad`)).ForEach(nil)
+	Parse([]byte(`{"ok":"bad`)).ForEach(nil)
 }
 
 func TestMap(t *testing.T) {
-	assert(t, len(ParseBytes([]byte(`"asdf"`)).Map()) == 0)
-	assert(t, ParseBytes([]byte(`{"asdf":"ghjk"`)).Map()["asdf"].String() ==
+	assert(t, len(Parse([]byte(`"asdf"`)).Map()) == 0)
+	assert(t, Parse([]byte(`{"asdf":"ghjk"`)).Map()["asdf"].String() ==
 		"ghjk")
-	assert(t, len(Result{Type: JSON, Raw: "**invalid**"}.Map()) == 0)
-	assert(t, Result{Type: JSON, Raw: "**invalid**"}.Value() == nil)
-	assert(t, Result{Type: JSON, Raw: "{"}.Map() != nil)
+	assert(t, len(Result[string]{Type: JSON, Raw: "**invalid**"}.Map()) == 0)
+	assert(t, Result[string]{Type: JSON, Raw: "**invalid**"}.Value() == nil)
+	assert(t, Result[string]{Type: JSON, Raw: "{"}.Map() != nil)
 }
 
 func TestBasic1(t *testing.T) {
 	mtok := get(basicJSON, `/loggy/programmers`)
 	var count int
-	mtok.ForEach(func(key, value Result) bool {
+	mtok.ForEach(func(key, value Result[[]byte]) bool {
 		assert(t, key.Exists())
 		assert(t, key.String() == fmt.Sprint(count))
 		assert(t, key.Int() == int64(count))
@@ -375,7 +375,7 @@ func TestBasic1(t *testing.T) {
 		}
 		if count == 1 {
 			i := 0
-			value.ForEach(func(key, value Result) bool {
+			value.ForEach(func(key, value Result[[]byte]) bool {
 				switch i {
 				case 0:
 					if key.String() != "firstName" ||
@@ -426,7 +426,7 @@ func TestBasic3(t *testing.T) {
 		t.Fatalf("expected %v, got %v", "Jason", Parse(basicJSON).
 			Get("loggy.programmers").Get("1").Get("firstName").Str)
 	}
-	var token Result
+	var token Result[string]
 	if token = Parse("-102"); token.Num != -102 {
 		t.Fatalf("expected %v, got %v", -102, token.Num)
 	}
@@ -522,25 +522,25 @@ func assert(t testing.TB, cond bool) {
 	}
 }
 func TestLess(t *testing.T) {
-	assert(t, !Result{Type: Null}.Less(Result{Type: Null}, true))
-	assert(t, Result{Type: Null}.Less(Result{Type: False}, true))
-	assert(t, Result{Type: Null}.Less(Result{Type: True}, true))
-	assert(t, Result{Type: Null}.Less(Result{Type: JSON}, true))
-	assert(t, Result{Type: Null}.Less(Result{Type: Number}, true))
-	assert(t, Result{Type: Null}.Less(Result{Type: String}, true))
-	assert(t, !Result{Type: False}.Less(Result{Type: Null}, true))
-	assert(t, Result{Type: False}.Less(Result{Type: True}, true))
-	assert(t, Result{Type: String, Str: "abc"}.Less(Result{Type: String,
+	assert(t, !Result[string]{Type: Null}.Less(Result[string]{Type: Null}, true))
+	assert(t, Result[string]{Type: Null}.Less(Result[string]{Type: False}, true))
+	assert(t, Result[string]{Type: Null}.Less(Result[string]{Type: True}, true))
+	assert(t, Result[string]{Type: Null}.Less(Result[string]{Type: JSON}, true))
+	assert(t, Result[string]{Type: Null}.Less(Result[string]{Type: Number}, true))
+	assert(t, Result[string]{Type: Null}.Less(Result[string]{Type: String}, true))
+	assert(t, !Result[string]{Type: False}.Less(Result[string]{Type: Null}, true))
+	assert(t, Result[string]{Type: False}.Less(Result[string]{Type: True}, true))
+	assert(t, Result[string]{Type: String, Str: "abc"}.Less(Result[string]{Type: String,
 		Str: "bcd"}, true))
-	assert(t, Result{Type: String, Str: "ABC"}.Less(Result{Type: String,
+	assert(t, Result[string]{Type: String, Str: "ABC"}.Less(Result[string]{Type: String,
 		Str: "abc"}, true))
-	assert(t, !Result{Type: String, Str: "ABC"}.Less(Result{Type: String,
+	assert(t, !Result[string]{Type: String, Str: "ABC"}.Less(Result[string]{Type: String,
 		Str: "abc"}, false))
-	assert(t, Result{Type: Number, Num: 123}.Less(Result{Type: Number,
+	assert(t, Result[string]{Type: Number, Num: 123}.Less(Result[string]{Type: Number,
 		Num: 456}, true))
-	assert(t, !Result{Type: Number, Num: 456}.Less(Result{Type: Number,
+	assert(t, !Result[string]{Type: Number, Num: 456}.Less(Result[string]{Type: Number,
 		Num: 123}, true))
-	assert(t, !Result{Type: Number, Num: 456}.Less(Result{Type: Number,
+	assert(t, !Result[string]{Type: Number, Num: 456}.Less(Result[string]{Type: Number,
 		Num: 456}, true))
 	assert(t, stringLessInsensitive("abcde", "BBCDE"))
 	assert(t, stringLessInsensitive("abcde", "bBCDE"))
@@ -695,7 +695,7 @@ func TestManyBasic(t *testing.T) {
 		testWatchForFallback = false
 	}()
 	testMany := func(shouldFallback bool, expect string, pointers ...string) {
-		results := GetManyBytes(
+		results := GetMany(
 			[]byte(manyJSON),
 			pointers...,
 		)
@@ -720,31 +720,22 @@ func TestManyBasic(t *testing.T) {
 	testMany(true, `[world]`, strings.Repeat("/a", 70)+"/hello")
 }
 func testMany(t *testing.T, json string, pointers, expected []string) {
-	testManyAny(t, json, pointers, expected, true)
-	testManyAny(t, json, pointers, expected, false)
+	testManyAny(t, []byte(json), pointers, expected)
+	testManyAny(t, json, pointers, expected)
 }
-func testManyAny(t *testing.T, json string, pointers, expected []string,
-	bytes bool) {
-	var result []Result
+func testManyAny[T Stringlike](t *testing.T, json T, pointers, expected []string) {
+	var result []Result[T]
 	for i := 0; i < 2; i++ {
 		var which string
 		if i == 0 {
 			which = "Get"
 			result = nil
 			for j := 0; j < len(expected); j++ {
-				if bytes {
-					result = append(result, GetBytes([]byte(json), pointers[j]))
-				} else {
-					result = append(result, Get(json, pointers[j]))
-				}
+				result = append(result, Get(json, pointers[j]))
 			}
 		} else if i == 1 {
 			which = "GetMany"
-			if bytes {
-				result = GetManyBytes([]byte(json), pointers...)
-			} else {
-				result = GetMany(json, pointers...)
-			}
+			result = GetMany(json, pointers...)
 		}
 		for j := 0; j < len(expected); j++ {
 			if result[j].String() != expected[j] {
@@ -872,7 +863,7 @@ func TestLen(t *testing.T) {
 	complicated := Parse(complicatedJSON)
 
 	cases := []struct {
-		value    Result
+		value    Result[string]
 		pointer  string
 		expected int
 	}{
@@ -1071,7 +1062,7 @@ func TestNullArray(t *testing.T) {
 }
 
 func TestIssue54(t *testing.T) {
-	var r []Result
+	var r []Result[string]
 	json := `{"MarketName":null,"Nounce":6115}`
 	r = GetMany(json, "/Nounce", "/Buys", "/Sells", "/Fills")
 	if strings.Replace(fmt.Sprintf("%v", r), " ", "", -1) != "[6115]" {
@@ -1164,11 +1155,11 @@ func TestArrayValues(t *testing.T) {
 		output += fmt.Sprintf("%#v", val)
 	}
 	expect := strings.Join([]string{
-		`jp.Result{Type:3, Raw:"\"PERSON1\"", Str:"PERSON1", Num:0, ` +
+		`jp.Result[string]{Type:3, Raw:"\"PERSON1\"", Str:"PERSON1", Num:0, ` +
 			`Index:11}`,
-		`jp.Result{Type:3, Raw:"\"PERSON2\"", Str:"PERSON2", Num:0, ` +
+		`jp.Result[string]{Type:3, Raw:"\"PERSON2\"", Str:"PERSON2", Num:0, ` +
 			`Index:21}`,
-		`jp.Result{Type:2, Raw:"0", Str:"", Num:0, Index:31}`,
+		`jp.Result[string]{Type:2, Raw:"0", Str:"", Num:0, Index:31}`,
 	}, "\n")
 	if output != expect {
 		t.Fatalf("expected '%v', got '%v'", expect, output)
@@ -1185,7 +1176,7 @@ func BenchmarkValid(b *testing.B) {
 func BenchmarkValidBytes(b *testing.B) {
 	complicatedJSON := []byte(complicatedJSON)
 	for i := 0; i < b.N; i++ {
-		ValidBytes(complicatedJSON)
+		Valid(complicatedJSON)
 	}
 }
 
@@ -1230,7 +1221,7 @@ func TestNaNInf(t *testing.T) {
 	}
 
 	var i int
-	Parse(json).ForEach(func(_, r Result) bool {
+	Parse(json).ForEach(func(_, r Result[string]) bool {
 		assert(t, r.Raw == raws[i])
 		assert(t, r.Num == nums[i] || (math.IsNaN(r.Num) && math.IsNaN(nums[i])))
 		assert(t, r.Type == Number)
@@ -1286,7 +1277,7 @@ func TestArrayKeys(t *testing.T) {
 	}
 	json += "]"
 	var i int
-	Parse(json).ForEach(func(key, value Result) bool {
+	Parse(json).ForEach(func(key, value Result[string]) bool {
 		assert(t, key.String() == fmt.Sprint(i))
 		assert(t, key.Int() == int64(i))
 		i++

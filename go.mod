@@ -1,3 +1,3 @@
-module github.com/pgavlin/jp/v2
+module github.com/pgavlin/jp/v3
 
-go 1.12
+go 1.20
