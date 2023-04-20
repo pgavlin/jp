@@ -1156,10 +1156,10 @@ func TestArrayValues(t *testing.T) {
 	}
 	expect := strings.Join([]string{
 		`jp.Result[string]{Type:3, Raw:"\"PERSON1\"", Str:"PERSON1", Num:0, ` +
-			`Index:11}`,
+			`Index:11, len:0}`,
 		`jp.Result[string]{Type:3, Raw:"\"PERSON2\"", Str:"PERSON2", Num:0, ` +
-			`Index:21}`,
-		`jp.Result[string]{Type:2, Raw:"0", Str:"", Num:0, Index:31}`,
+			`Index:21, len:0}`,
+		`jp.Result[string]{Type:2, Raw:"0", Str:"", Num:0, Index:31, len:0}`,
 	}, "\n")
 	if output != expect {
 		t.Fatalf("expected '%v', got '%v'", expect, output)

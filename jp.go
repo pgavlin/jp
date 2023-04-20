@@ -65,6 +65,8 @@ type Result[T Stringlike] struct {
 	Num float64
 	// Index of raw value in original json, zero means index unknown
 	Index int
+	// length of array or object
+	len int
 }
 
 // String returns a string representation of the value.
@@ -188,14 +190,7 @@ func (t Result[T]) Time() time.Time {
 
 // Len returns the length of the result if the result is an object or array.
 func (t Result[T]) Len() int {
-	switch {
-	case t.IsArray():
-		return t.arrayOrMapLen('[')
-	case t.IsObject():
-		return t.arrayOrMapLen('{')
-	default:
-		return 0
-	}
+	return t.len
 }
 
 // Array returns back an array of values.
@@ -423,7 +418,7 @@ func (t Result[T]) arrayOrMap(vc byte, valueize bool) (r arrayOrMapResult[T]) {
 			}
 		case '{', '[':
 			value.Type = JSON
-			value.Raw = squash(json[i:])
+			value.Raw, value.len = squash(json[i:])
 			value.Str, value.Num = "", 0
 		case 'n':
 			value.Type = Null
@@ -470,57 +465,6 @@ func (t Result[T]) arrayOrMap(vc byte, valueize bool) (r arrayOrMapResult[T]) {
 		}
 	}
 	return
-}
-
-func (t Result[T]) arrayOrMapLen(vc byte) int {
-	var json = t.Raw
-	var i int
-	var count int
-	for ; i < len(json); i++ {
-		if json[i] == vc {
-			i++
-			break
-		}
-		if json[i] > ' ' {
-			return 0
-		}
-	}
-	for ; i < len(json); i++ {
-		if json[i] <= ' ' {
-			continue
-		}
-		// get next value
-		if json[i] == ']' || json[i] == '}' {
-			break
-		}
-		var raw T
-		switch json[i] {
-		default:
-			if (json[i] >= '0' && json[i] <= '9') || json[i] == '-' {
-				raw = rawnum(json[i:])
-			} else {
-				continue
-			}
-		case '{', '[':
-			raw = squash(json[i:])
-		case 'n':
-			raw = tolit(json[i:])
-		case 't':
-			raw = tolit(json[i:])
-		case 'f':
-			raw = tolit(json[i:])
-		case '"':
-			raw, _ = rawstr(json[i:])
-		}
-
-		i += len(raw) - 1
-
-		count++
-	}
-	if vc == '{' {
-		return count / 2
-	}
-	return count
 }
 
 // Parse parses the json and returns a result.
@@ -576,10 +520,11 @@ func Parse[T Stringlike](json T) Result[T] {
 	return value
 }
 
-func squash[T Stringlike](json T) T {
+func squash[T Stringlike](json T) (T, int) {
 	// expects that the lead character is a '[' or '{' or '(' or '"'
 	// squash the value, ignoring all nested arrays and objects.
-	var i, depth int
+	var i, depth, count int
+	var any bool
 	if json[0] != '"' {
 		i, depth = 1, 1
 	}
@@ -587,6 +532,7 @@ func squash[T Stringlike](json T) T {
 		if json[i] >= '"' && json[i] <= '}' {
 			switch json[i] {
 			case '"':
+				any = true
 				i++
 				s2 := i
 				for ; i < len(json); i++ {
@@ -612,21 +558,30 @@ func squash[T Stringlike](json T) T {
 				}
 				if depth == 0 {
 					if i >= len(json) {
-						return json
+						return json, count
 					}
-					return json[:i+1]
+					return json[:i+1], count
+				}
+			case ',':
+				any = true
+				if depth == 1 {
+					count++
 				}
 			case '{', '[', '(':
+				any = true
 				depth++
 			case '}', ']', ')':
 				depth--
 				if depth == 0 {
-					return json[:i+1]
+					if any {
+						count++
+					}
+					return json[:i+1], count
 				}
 			}
 		}
 	}
-	return json
+	return json, count
 }
 
 func rawnum[T Stringlike](json T) T {
@@ -882,17 +837,18 @@ func getArrayIndex(pointer string) (index int, rest string) {
 	return index, rest
 }
 
-func parseSquash[T Stringlike](json T, i int) (int, T) {
+func parseSquash[T Stringlike](json T, i int) (int, T, int) {
 	// expects that the lead character is a '[' or '{' or '('
 	// squash the value, ignoring all nested arrays and objects.
 	// the first '[' or '{' or '(' has already been read
 	s := i
 	i++
-	depth := 1
+	depth, count, any := 1, 0, false
 	for ; i < len(json); i++ {
 		if json[i] >= '"' && json[i] <= '}' {
 			switch json[i] {
 			case '"':
+				any = true
 				i++
 				s2 := i
 				for ; i < len(json); i++ {
@@ -916,30 +872,41 @@ func parseSquash[T Stringlike](json T, i int) (int, T) {
 						break
 					}
 				}
+			case ',':
+				any = true
+				if depth == 1 {
+					count++
+				}
 			case '{', '[', '(':
+				any = true
 				depth++
 			case '}', ']', ')':
 				depth--
 				if depth == 0 {
 					i++
-					return i, json[s:i]
+					if any {
+						count++
+					}
+					return i, json[s:i], count
 				}
 			}
 		}
 	}
-	return i, json[s:]
+	return i, json[s:], count
 }
 
 func parseObject[T Stringlike](c *parseContext[T], i int, pointer string) (int, bool) {
 	var pmatch, kesc, vesc, ok, hit bool
 	var ref string
 	var key, val T
+	var count int
 	ref, pointer = getReferenceToken(pointer)
 	if ref == "" {
 		// return the entire object
-		i, val = parseSquash(c.json, i-1)
+		i, val, count = parseSquash(c.json, i-1)
 		c.value.Raw = val
 		c.value.Type = JSON
+		c.value.len = count
 		return i, true
 	}
 	more := pointer != ""
@@ -1033,10 +1000,11 @@ func parseObject[T Stringlike](c *parseContext[T], i int, pointer string) (int, 
 						return i, true
 					}
 				} else {
-					i, val = parseSquash(c.json, i)
+					i, val, count = parseSquash(c.json, i)
 					if hit {
 						c.value.Raw = val
 						c.value.Type = JSON
+						c.value.len = count
 						return i, true
 					}
 				}
@@ -1047,10 +1015,11 @@ func parseObject[T Stringlike](c *parseContext[T], i int, pointer string) (int, 
 						return i, true
 					}
 				} else {
-					i, val = parseSquash(c.json, i)
+					i, val, count = parseSquash(c.json, i)
 					if hit {
 						c.value.Raw = val
 						c.value.Type = JSON
+						c.value.len = count
 						return i, true
 					}
 				}
@@ -1097,12 +1066,14 @@ func parseArray[T Stringlike](c *parseContext[T], i int, pointer string) (int, b
 	var val T
 	var h int
 	var partidx int
+	var count int
 	partidx, pointer = getArrayIndex(pointer)
 	if partidx == -1 {
 		// return the entire object
-		i, val = parseSquash(c.json, i-1)
+		i, val, count = parseSquash(c.json, i-1)
 		c.value.Raw = val
 		c.value.Type = JSON
+		c.value.len = count
 		return i, true
 	}
 	more := pointer != ""
@@ -1148,10 +1119,11 @@ func parseArray[T Stringlike](c *parseContext[T], i int, pointer string) (int, b
 						return i, true
 					}
 				} else {
-					i, val = parseSquash(c.json, i)
+					i, val, count = parseSquash(c.json, i)
 					if hit {
 						c.value.Raw = val
 						c.value.Type = JSON
+						c.value.len = count
 						return i, true
 					}
 				}
@@ -1162,10 +1134,11 @@ func parseArray[T Stringlike](c *parseContext[T], i int, pointer string) (int, b
 						return i, true
 					}
 				} else {
-					i, val = parseSquash(c.json, i)
+					i, val, count = parseSquash(c.json, i)
 					if hit {
 						c.value.Raw = val
 						c.value.Type = JSON
+						c.value.len = count
 						return i, true
 					}
 				}
@@ -1383,12 +1356,14 @@ func stringLessInsensitive(a, b string) bool {
 func parseAny[T Stringlike](json T, i int, hit bool) (int, Result[T], bool) {
 	var res Result[T]
 	var val T
+	var count int
 	for ; i < len(json); i++ {
 		if json[i] == '{' || json[i] == '[' {
-			i, val = parseSquash(json, i)
+			i, val, count = parseSquash(json, i)
 			if hit {
 				res.Raw = val
 				res.Type = JSON
+				res.len = count
 			}
 			var tmp parseContext[T]
 			tmp.value = res
